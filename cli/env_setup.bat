@@ -1,0 +1,224 @@
+@echo off
+setlocal enabledelayedexpansion
+
+set ENV_DIR=%cd%
+set ENV_FILE=%ENV_DIR%\.env
+
+echo ============================================================
+echo   Environment Variables Management Tool
+echo ============================================================
+echo.
+
+if "%~1"=="" goto :show_usage
+if /i "%~1"=="help" goto :show_usage
+if /i "%~1"=="--help" goto :show_usage
+if /i "%~1"=="-h" goto :show_usage
+if /i "%~1"=="load" goto :load_env
+if /i "%~1"=="show" goto :show_env
+if /i "%~1"=="init" goto :init_env
+if /i "%~1"=="check" goto :check_env
+if /i "%~1"=="export" goto :export_env
+
+echo Unknown command: %~1
+echo.
+goto :show_usage
+
+:show_usage
+echo Usage: %~nx0 [command] [options]
+echo.
+echo Commands:
+echo   load [env]    Load environment variables (dev/staging/prod)
+echo   show          Show current environment variables
+echo   init          Create .env.example template
+echo   check         Check required environment variables
+echo   export [file] Export variables to file
+echo   help          Show this help message
+echo.
+echo Examples:
+echo   %~nx0 load          Load from .env
+echo   %~nx0 load dev      Load from .env.dev
+echo   %~nx0 show          Display all env vars
+echo   %~nx0 init          Generate .env.example template
+echo.
+echo Environment Files:
+echo   .env           Default environment
+echo   .env.dev       Development environment
+echo   .env.staging   Staging environment
+echo   .env.prod      Production environment
+echo.
+exit /b 0
+
+:load_env
+set env_name=%~2
+if "%env_name%"=="" (
+    set env_path=%ENV_FILE%
+) else (
+    set env_path=%ENV_DIR%\.env.%env_name%
+)
+
+if not exist "!env_path!" (
+    echo [ERROR] Environment file not found: !env_path!
+    exit /b 1
+)
+
+echo [INFO] Loading environment from: !env_path!
+echo.
+
+for /f "usebackq tokens=1,* delims==" %%a in ("!env_path!") do (
+    set "line=%%a"
+    if "!line:~0,1!" neq "#" (
+        if "!line!" neq "" (
+            set "%%a=%%b"
+            echo   Set %%a=********
+        )
+    )
+)
+
+echo.
+echo [INFO] Environment loaded successfully
+echo [WARN] Variables are set for current session only
+goto :end
+
+:show_env
+echo Current Environment Variables:
+echo ----------------------------------------
+
+if not exist "%ENV_FILE%" (
+    echo [WARN] No .env file found
+    goto :end
+)
+
+for /f "usebackq tokens=1,* delims==" %%a in ("%ENV_FILE%") do (
+    set "line=%%a"
+    if "!line:~0,1!" neq "#" (
+        if "!line!" neq "" (
+            set "key=%%a"
+            set "value=!%%a!"
+            if "!value!"=="" set "value=^<not set^>"
+            
+            echo !key! | findstr /i "PASSWORD SECRET KEY TOKEN" >nul
+            if !errorlevel!==0 (
+                set "value=********"
+            )
+            
+            echo   !key! = !value!
+        )
+    )
+)
+
+echo ----------------------------------------
+goto :end
+
+:init_env
+set env_example=%ENV_DIR%\.env.example
+
+if exist "%env_example%" (
+    echo [WARN] .env.example already exists
+    set /p confirm="Overwrite? (y/n): "
+    if /i "!confirm!" neq "y" exit /b 0
+)
+
+(
+echo # Application
+echo APP_NAME=myapp
+echo APP_ENV=development
+echo APP_PORT=3000
+echo APP_DEBUG=true
+echo.
+echo # Database
+echo DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+echo DATABASE_HOST=localhost
+echo DATABASE_PORT=5432
+echo DATABASE_NAME=dbname
+echo DATABASE_USER=user
+echo DATABASE_PASSWORD=password
+echo.
+echo # Redis
+echo REDIS_URL=redis://localhost:6379
+echo REDIS_HOST=localhost
+echo REDIS_PORT=6379
+echo.
+echo # API Keys
+echo OPENAI_API_KEY=sk-your-api-key
+echo ANTHROPIC_API_KEY=sk-ant-your-api-key
+echo.
+echo # AWS
+echo AWS_ACCESS_KEY_ID=your-access-key
+echo AWS_SECRET_ACCESS_KEY=your-secret-key
+echo AWS_REGION=us-east-1
+echo AWS_S3_BUCKET=my-bucket
+echo.
+echo # JWT
+echo JWT_SECRET=your-jwt-secret
+echo JWT_EXPIRES_IN=7d
+echo.
+echo # Email
+echo SMTP_HOST=smtp.example.com
+echo SMTP_PORT=587
+echo SMTP_USER=user@example.com
+echo SMTP_PASSWORD=password
+echo.
+echo # Logging
+echo LOG_LEVEL=info
+echo LOG_FORMAT=json
+) > "%env_example%"
+
+echo [INFO] Created .env.example template
+echo [INFO] Copy it to .env and fill in your values: copy .env.example .env
+goto :end
+
+:check_env
+echo Checking required environment variables:
+echo ----------------------------------------
+
+set missing=0
+
+for %%v in (APP_NAME DATABASE_URL) do (
+    if "!%%v!"=="" (
+        echo   [X] %%v ^(missing^)
+        set /a missing+=1
+    ) else (
+        echo   [OK] %%v
+    )
+)
+
+echo ----------------------------------------
+
+if !missing! gtr 0 (
+    echo [ERROR] !missing! required variable^(s^) missing
+    exit /b 1
+) else (
+    echo [INFO] All required variables are set
+)
+goto :end
+
+:export_env
+set output_file=%~2
+if "%output_file%"=="" set output_file=env_export.bat
+
+echo Exporting environment variables to: %output_file%
+
+(
+echo @echo off
+echo REM Generated by env_setup.bat on %date% %time%
+echo.
+
+if exist "%ENV_FILE%" (
+    for /f "usebackq tokens=1,* delims==" %%a in ("%ENV_FILE%") do (
+        set "line=%%a"
+        if "!line:~0,1!" neq "#" (
+            if "!line!" neq "" (
+                echo set "%%a=%%b"
+            )
+        )
+    )
+)
+) > "%output_file%"
+
+echo [INFO] Exported to %output_file%
+goto :end
+
+:end
+echo.
+echo ============================================================
+endlocal
