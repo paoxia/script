@@ -375,13 +375,116 @@ install_python_tools() {
             ;;
     esac
 
-    if ! check_command poetry; then
-        log_info "Installing poetry..."
-        curl -sSL https://install.python-poetry.org | python3 -
-        export PATH="$HOME/.local/bin:$PATH"
+    echo ""
+    printf "${YELLOW}Select Python tools to install:${NC}\n"
+    echo "  1) pyenv      - Python version manager"
+    echo "  2) poetry     - Dependency management"
+    echo "  3) uv         - Fast Python package installer"
+    echo "  4) conda      - Miniconda (Anaconda distribution)"
+    echo "  5) pipenv     - Pipenv virtualenv manager"
+    echo "  a) All        - Install all Python tools"
+    echo "  n) None       - Skip additional tools"
+    echo ""
+
+    local py_selections=()
+    while true; do
+        read -rp "Enter your choice (1-5, a, n): " py_choice
+        case "$py_choice" in
+            1) py_selections+=("pyenv") ;;
+            2) py_selections+=("poetry") ;;
+            3) py_selections+=("uv") ;;
+            4) py_selections+=("conda") ;;
+            5) py_selections+=("pipenv") ;;
+            a|A)
+                py_selections=(pyenv poetry uv conda pipenv)
+                break
+                ;;
+            n|N)
+                break
+                ;;
+            *)
+                log_error "Invalid choice: $py_choice"
+                continue
+                ;;
+        esac
+        read -rp "Select more? (y/n): " more
+        [[ "$more" != "y" && "$more" != "Y" ]] && break
+    done
+
+    local rc_file="$HOME/.bashrc"
+    if [[ -f "$HOME/.zshrc" ]]; then
+        rc_file="$HOME/.zshrc"
     fi
 
-    log_info "Python tools installed"
+    for tool in "${py_selections[@]}"; do
+        case "$tool" in
+            pyenv)
+                if check_command pyenv; then
+                    log_info "pyenv already installed"
+                else
+                    log_step "Installing pyenv..."
+                    curl https://pyenv.run | bash
+                    if ! grep -q "pyenv" "$rc_file" 2>/dev/null; then
+                        echo 'export PYENV_ROOT="$HOME/.pyenv"' >> "$rc_file"
+                        echo '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"' >> "$rc_file"
+                        echo 'eval "$(pyenv init -)"' >> "$rc_file"
+                    fi
+                    export PYENV_ROOT="$HOME/.pyenv"
+                    export PATH="$PYENV_ROOT/bin:$PATH"
+                fi
+                log_info "pyenv installed"
+                ;;
+            poetry)
+                if check_command poetry; then
+                    log_info "poetry already installed"
+                else
+                    log_step "Installing poetry..."
+                    curl -sSL https://install.python-poetry.org | python3 -
+                    export PATH="$HOME/.local/bin:$PATH"
+                fi
+                log_info "poetry installed"
+                ;;
+            uv)
+                if check_command uv; then
+                    log_info "uv already installed"
+                else
+                    log_step "Installing uv..."
+                    curl -LsSf https://astral.sh/uv/install.sh | sh
+                    export PATH="$HOME/.cargo/bin:$PATH"
+                fi
+                log_info "uv installed"
+                ;;
+            conda)
+                if [[ -d "${HOME}/miniconda3" ]]; then
+                    log_info "Miniconda already installed"
+                else
+                    log_step "Installing Miniconda..."
+                    local arch="x86_64"
+                    if [[ "$(uname -m)" == "aarch64" ]]; then
+                        arch="aarch64"
+                    fi
+                    curl -fsSL "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-${arch}.sh" -o /tmp/miniconda.sh
+                    bash /tmp/miniconda.sh -b -p "${HOME}/miniconda3"
+                    rm -f /tmp/miniconda.sh
+                    if ! grep -q "miniconda3" "$rc_file" 2>/dev/null; then
+                        echo 'export PATH="$HOME/miniconda3/bin:$PATH"' >> "$rc_file"
+                    fi
+                    log_info "Miniconda installed"
+                fi
+                ;;
+            pipenv)
+                if check_command pipenv; then
+                    log_info "pipenv already installed"
+                else
+                    log_step "Installing pipenv..."
+                    pip3 install --user pipenv
+                fi
+                log_info "pipenv installed"
+                ;;
+        esac
+    done
+
+    log_info "Python tools setup complete"
 }
 
 install_cloud_tools() {
@@ -437,7 +540,7 @@ show_menu() {
     echo "  7) Development Tools      - curl, wget, jq, tree, htop, tmux, etc."
     echo "  8) IDE                    - IntelliJ IDEA Community Edition"
     echo "  9) Terminal Tools         - Oh My Zsh, Starship, zoxide"
-    echo " 10) Python Tools           - Python 3, pip, poetry"
+    echo " 10) Python Tools           - Python 3 + optional: pyenv, poetry, uv, conda, pipenv"
     echo " 11) Cloud Tools            - AWS CLI, kubectl, helm, terraform"
     echo ""
     echo "  a) All                    - Install all components"

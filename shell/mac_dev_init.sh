@@ -276,10 +276,84 @@ install_python_tools() {
     log_step "Setting up Python tools..."
 
     brew_install python@3.12
-    brew_install pyenv
-    brew_install poetry
 
-    log_info "Python 3.12, pyenv, poetry installed"
+    echo ""
+    printf "${YELLOW}Select Python tools to install:${NC}\n"
+    echo "  1) pyenv      - Python version manager"
+    echo "  2) poetry     - Dependency management"
+    echo "  3) uv         - Fast Python package installer"
+    echo "  4) conda      - Miniconda (Anaconda distribution)"
+    echo "  5) pipenv     - Pipenv virtualenv manager"
+    echo "  a) All        - Install all Python tools"
+    echo "  n) None       - Skip additional tools"
+    echo ""
+
+    local py_selections=()
+    while true; do
+        read -rp "Enter your choice (1-5, a, n): " py_choice
+        case "$py_choice" in
+            1) py_selections+=("pyenv") ;;
+            2) py_selections+=("poetry") ;;
+            3) py_selections+=("uv") ;;
+            4) py_selections+=("conda") ;;
+            5) py_selections+=("pipenv") ;;
+            a|A)
+                py_selections=(pyenv poetry uv conda pipenv)
+                break
+                ;;
+            n|N)
+                break
+                ;;
+            *)
+                log_error "Invalid choice: $py_choice"
+                continue
+                ;;
+        esac
+        read -rp "Select more? (y/n): " more
+        [[ "$more" != "y" && "$more" != "Y" ]] && break
+    done
+
+    for tool in "${py_selections[@]}"; do
+        case "$tool" in
+            pyenv)
+                brew_install pyenv
+                if ! grep -q "pyenv" ~/.zshrc 2>/dev/null; then
+                    echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.zshrc
+                    echo '[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.zshrc
+                    echo 'eval "$(pyenv init -)"' >> ~/.zshrc
+                fi
+                log_info "pyenv installed"
+                ;;
+            poetry)
+                brew_install poetry
+                log_info "poetry installed"
+                ;;
+            uv)
+                brew_install uv
+                log_info "uv installed"
+                ;;
+            conda)
+                if [[ -d "${HOME}/miniconda3" ]]; then
+                    log_info "Miniconda already installed"
+                else
+                    log_step "Installing Miniconda..."
+                    curl -fsSL https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh -o /tmp/miniconda.sh
+                    bash /tmp/miniconda.sh -b -p "${HOME}/miniconda3"
+                    rm -f /tmp/miniconda.sh
+                    if ! grep -q "miniconda3" ~/.zshrc 2>/dev/null; then
+                        echo 'export PATH="$HOME/miniconda3/bin:$PATH"' >> ~/.zshrc
+                    fi
+                    log_info "Miniconda installed"
+                fi
+                ;;
+            pipenv)
+                brew_install pipenv
+                log_info "pipenv installed"
+                ;;
+        esac
+    done
+
+    log_info "Python tools setup complete"
 }
 
 install_cloud_tools() {
@@ -310,7 +384,7 @@ show_menu() {
     echo "  7) Development Tools      - curl, wget, jq, tree, htop, tmux, etc."
     echo "  8) IDE                    - IntelliJ IDEA Community Edition"
     echo "  9) Terminal Tools         - Oh My Zsh, Starship, zoxide"
-    echo " 10) Python Tools           - Python 3.12, pyenv, poetry"
+    echo " 10) Python Tools           - Python 3.12 + optional: pyenv, poetry, uv, conda, pipenv"
     echo " 11) Cloud Tools            - AWS CLI, kubectl, helm, terraform"
     echo ""
     echo "  a) All                    - Install all components"
