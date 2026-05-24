@@ -367,10 +367,126 @@ install_cloud_tools() {
     log_info "AWS CLI, kubectl, helm, terraform installed"
 }
 
+install_frontend_tools() {
+    log_step "Setting up frontend tools..."
+
+    if ! check_command node; then
+        log_warn "Node.js not found. Please install Node.js first (option 4)."
+        return 1
+    fi
+
+    echo ""
+    printf "${YELLOW}Select frontend tools to install:${NC}\n"
+    echo "  1) pnpm         - Fast, disk space efficient package manager"
+    echo "  2) yarn         - Fast and reliable package manager"
+    echo "  3) bun          - Fast all-in-one JavaScript runtime"
+    echo "  4) typescript   - TypeScript compiler"
+    echo "  5) vite         - Next generation frontend tooling"
+    echo "  6) prettier     - Code formatter"
+    echo "  7) eslint       - JavaScript linter"
+    echo "  8) @angular/cli - Angular CLI"
+    echo "  9) create-vue   - Vue.js project scaffolding"
+    echo " 10) create-react-app - React project scaffolding"
+    echo "  a) All          - Install all frontend tools"
+    echo "  n) None         - Skip frontend tools"
+    echo ""
+
+    local fe_selections=()
+    while true; do
+        read -rp "Enter your choice (1-10, a, n): " fe_choice
+        case "$fe_choice" in
+            1) fe_selections+=("pnpm") ;;
+            2) fe_selections+=("yarn") ;;
+            3) fe_selections+=("bun") ;;
+            4) fe_selections+=("typescript") ;;
+            5) fe_selections+=("vite") ;;
+            6) fe_selections+=("prettier") ;;
+            7) fe_selections+=("eslint") ;;
+            8) fe_selections+=("angular") ;;
+            9) fe_selections+=("vue") ;;
+            10) fe_selections+=("react") ;;
+            a|A)
+                fe_selections=(pnpm yarn bun typescript vite prettier eslint angular vue react)
+                break
+                ;;
+            n|N)
+                break
+                ;;
+            *)
+                log_error "Invalid choice: $fe_choice"
+                continue
+                ;;
+        esac
+        read -rp "Select more? (y/n): " more
+        [[ "$more" != "y" && "$more" != "Y" ]] && break
+    done
+
+    for tool in "${fe_selections[@]}"; do
+        case "$tool" in
+            pnpm)
+                log_step "Installing pnpm..."
+                npm install -g pnpm
+                log_info "pnpm installed"
+                ;;
+            yarn)
+                log_step "Installing yarn..."
+                npm install -g yarn
+                log_info "yarn installed"
+                ;;
+            bun)
+                log_step "Installing bun..."
+                curl -fsSL https://bun.sh/install | bash
+                if ! grep -q "bun" ~/.zshrc 2>/dev/null; then
+                    echo 'export BUN_INSTALL="$HOME/.bun"' >> ~/.zshrc
+                    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.zshrc
+                fi
+                log_info "bun installed"
+                ;;
+            typescript)
+                log_step "Installing TypeScript..."
+                npm install -g typescript ts-node
+                log_info "TypeScript installed"
+                ;;
+            vite)
+                log_step "Installing Vite..."
+                npm install -g vite
+                log_info "Vite installed"
+                ;;
+            prettier)
+                log_step "Installing Prettier..."
+                npm install -g prettier
+                log_info "Prettier installed"
+                ;;
+            eslint)
+                log_step "Installing ESLint..."
+                npm install -g eslint
+                log_info "ESLint installed"
+                ;;
+            angular)
+                log_step "Installing Angular CLI..."
+                npm install -g @angular/cli
+                log_info "Angular CLI installed"
+                ;;
+            vue)
+                log_step "Installing create-vue..."
+                npm install -g create-vue
+                log_info "create-vue installed"
+                ;;
+            react)
+                log_step "Installing create-react-app..."
+                npm install -g create-react-app
+                log_info "create-react-app installed"
+                ;;
+        esac
+    done
+
+    log_info "Frontend tools setup complete"
+}
+
 show_menu() {
     echo ""
     printf "${CYAN}========================================${NC}\n"
-    printf "${CYAN}   Mac Backend Developer Environment    ${NC}\n"
+    printf "${CYAN}   Mac Developer Environment Setup       ${NC}\n"
     printf "${CYAN}========================================${NC}\n"
     echo ""
     printf "${YELLOW}Select components to install:${NC}\n"
@@ -386,6 +502,7 @@ show_menu() {
     echo "  9) Terminal Tools         - Oh My Zsh, Starship, zoxide"
     echo " 10) Python Tools           - Python 3.12 + optional: pyenv, poetry, uv, conda, pipenv"
     echo " 11) Cloud Tools            - AWS CLI, kubectl, helm, terraform"
+    echo " 12) Frontend Tools         - pnpm, yarn, bun, typescript, vite, prettier, eslint, etc."
     echo ""
     echo "  a) All                    - Install all components"
     echo "  q) Quit                   - Exit without installation"
@@ -417,7 +534,7 @@ main() {
     while true; do
         show_menu
         local choice
-        read -rp "Enter your choice (1-11, a, q): " choice
+        read -rp "Enter your choice (1-12, a, q): " choice
 
         case "$choice" in
             1) selections+=("git") ;;
@@ -431,8 +548,9 @@ main() {
             9) selections+=("terminal") ;;
             10) selections+=("python") ;;
             11) selections+=("cloud") ;;
+            12) selections+=("frontend") ;;
             a|A)
-                selections=(git java go node docker databases dev_tools ide terminal python cloud)
+                selections=(git java go node docker databases dev_tools ide terminal python cloud frontend)
                 break
                 ;;
             q|Q)
@@ -482,6 +600,7 @@ main() {
             terminal) install_terminal_tools ;;
             python) install_python_tools ;;
             cloud) install_cloud_tools ;;
+            frontend) install_frontend_tools ;;
         esac
     done
 
