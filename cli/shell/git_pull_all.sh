@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Git Repository Batch Update Tool
-# Automatically pull latest code from all git repositories in current directory
+# Pull each Git repository found in an immediate subdirectory of this script's directory.
 
 # Colors for output
 RED='\033[0;31m'
@@ -31,7 +31,7 @@ echo "Current directory: $SCRIPT_DIR"
 echo "Max parallel pulls: $max_parallel"
 echo ""
 
-# Find all git repositories
+# Inspect immediate child directories only; repositories with a .git file are not selected.
 repos=()
 for dir in "$SCRIPT_DIR"/*/; do
     if [ -d "$dir/.git" ]; then
@@ -59,6 +59,7 @@ update_repo() {
     echo -e "Updating: ${YELLOW}$repo${NC}"
     echo "--------------------------------------------------"
     
+    # Each update runs in a background job, so this directory change stays in that job.
     cd "$SCRIPT_DIR/$repo"
     
     if git pull 2>&1; then
@@ -70,12 +71,13 @@ update_repo() {
     echo ""
 }
 
-# Update repositories in parallel
+# Launch a pull in the background and wait for a slot before launching another.
 update_repo_parallel() {
     local repo="$1"
     
     update_repo "$repo" &
     
+    # Throttle background jobs to the configured parallelism limit.
     while [ $(jobs | wc -l) -ge $max_parallel ]; do
         sleep 1
     done
@@ -91,6 +93,7 @@ wait_all() {
 echo "Starting parallel updates..."
 echo ""
 
+# Schedule every repository, then wait for the final background jobs to finish.
 for repo in "${repos[@]}"; do
     update_repo_parallel "$repo"
 done

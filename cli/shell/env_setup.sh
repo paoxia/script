@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Manage .env files and variables for the current shell or project directory.
+# Source this file and call load_env to retain loaded variables in the caller's shell.
+
 set -euo pipefail
 
 RED='\033[0;31m'
@@ -8,10 +11,12 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+# Allow callers to target another project without changing the working directory.
 ENV_DIR="${ENV_DIR:-.}"
 ENV_FILE="${ENV_DIR}/.env"
 ENV_EXAMPLE="${ENV_DIR}/.env.example"
 
+# Shared logging helpers format informational, warning, and error messages.
 log_info() {
     printf "${GREEN}[INFO]${NC} %s\n" "$*"
 }
@@ -24,6 +29,7 @@ log_error() {
     printf "${RED}[ERROR]${NC} %s\n" "$*" >&2
 }
 
+# Display supported commands and environment file naming conventions.
 show_usage() {
     cat <<'EOF'
 Environment Variables Management Tool
@@ -51,10 +57,12 @@ Environment Files:
 EOF
 }
 
+# Parse KEY=value entries and export them without evaluating the file as shell code.
 load_env() {
     local env_name="${1:-}"
     local env_file
 
+    # A named environment selects .env.<name>; otherwise use the default .env file.
     if [[ -n "$env_name" ]]; then
         env_file="${ENV_DIR}/.env.${env_name}"
     else
@@ -69,6 +77,7 @@ load_env() {
     log_info "Loading environment from: $env_file"
 
     local line_num=0
+    # Preserve backslashes and process a final line even when it lacks a newline.
     while IFS= read -r line || [[ -n "$line" ]]; do
         ((line_num++))
         
@@ -79,6 +88,7 @@ load_env() {
             local key="${BASH_REMATCH[1]}"
             local value="${BASH_REMATCH[2]}"
             
+            # Remove matching outer quotes while keeping the value literal.
             if [[ "$value" =~ ^\"(.*)\"$ ]] || [[ "$value" =~ ^\'(.*)\'$ ]]; then
                 value="${BASH_REMATCH[1]}"
             fi
@@ -92,6 +102,7 @@ load_env() {
     log_info "Environment loaded successfully"
 }
 
+# Read variable names from .env and display their current shell values.
 show_env() {
     printf "${CYAN}Current Environment Variables:${NC}\n"
     echo "----------------------------------------"
@@ -105,6 +116,7 @@ show_env() {
                 local key="${BASH_REMATCH[1]}"
                 local value="${!key:-<not set>}"
                 
+                # Mask values whose variable names indicate common secret types.
                 if [[ "$key" =~ (PASSWORD|SECRET|KEY|TOKEN) ]]; then
                     value="********"
                 fi
@@ -119,6 +131,7 @@ show_env() {
     echo "----------------------------------------"
 }
 
+# Write an example configuration, prompting before replacing an existing template.
 init_env() {
     local template='
 # Application
@@ -176,6 +189,7 @@ LOG_FORMAT=json
     log_info "Copy it to .env and fill in your values: cp .env.example .env"
 }
 
+# Return failure when any variable in the required list is unset or empty.
 check_env() {
     local required_vars=(
         "APP_NAME"
@@ -205,6 +219,7 @@ check_env() {
     fi
 }
 
+# Write current shell values for names declared in .env to an export script.
 export_env() {
     local output_file="${1:-env_export.sh}"
 
@@ -231,6 +246,7 @@ export_env() {
     log_info "Exported to $output_file"
 }
 
+# Dispatch the requested operation, defaulting to the usage text.
 main() {
     local command="${1:-help}"
 
@@ -261,6 +277,7 @@ main() {
     esac
 }
 
+# Direct execution dispatches a command; sourcing only defines functions and settings.
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
 fi

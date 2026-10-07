@@ -1,20 +1,26 @@
 #!/bin/bash
 
+# Clone curated AI project groups into sibling directories of this repository.
+# Usage: ./ai_repos.sh [1-7|all]; omit the argument for interactive selection.
+
 echo "============================================================"
 echo "Git Clone All Agent Projects"
 echo "============================================================"
 echo ""
 
+# Require a Git working tree so the destination can be derived from its root.
 GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$GIT_ROOT" ]; then
     echo "Error: Not inside a git repository"
     exit 1
 fi
 
+# Keep cloned projects beside this repository rather than nesting them inside it.
 TARGET_ROOT=$(dirname "$GIT_ROOT")
 echo "Target directory: $TARGET_ROOT"
 echo ""
 
+# Display the project groups accepted by the command-line argument and prompt.
 show_usage() {
     echo "Usage: $0 [module]"
     echo ""
@@ -30,6 +36,7 @@ show_usage() {
     echo ""
 }
 
+# Use the supplied module, or prompt when no argument is provided.
 if [ -z "$1" ]; then
     show_usage
     read -p "Enter module number (1-7, all): " choice
@@ -37,6 +44,7 @@ else
     choice="$1"
 fi
 
+# Clone general agent frameworks and related reference projects.
 module1() {
     echo "--- General Agent Frameworks ---"
     git clone https://github.com/langchain-ai/langchain.git "$TARGET_ROOT/langchain"
@@ -53,6 +61,7 @@ module1() {
     git clone https://github.com/666ghj/MiroFish.git "$TARGET_ROOT/MiroFish"
 }
 
+# Clone tools focused on coding agents and automated software development.
 module2() {
     echo "--- Coding Agents ---"
     git clone https://github.com/bytedance/trae-agent.git "$TARGET_ROOT/trae-agent"
@@ -65,17 +74,20 @@ module2() {
     git clone https://github.com/earendil-works/pi.git "$TARGET_ROOT/pi"
 }
 
+# Clone agents that interact with browsers and desktop environments.
 module3() {
     echo "--- Browser / Computer Control Agents ---"
     git clone https://github.com/browser-use/browser-use.git "$TARGET_ROOT/browser-use"
     git clone https://github.com/anthropics/anthropic-quickstarts.git "$TARGET_ROOT/anthropic-quickstarts"
 }
 
+# Clone research-oriented agent projects.
 module4() {
     echo "--- Research Agents ---"
     git clone https://github.com/assafelovic/gpt-researcher.git "$TARGET_ROOT/gpt-researcher"
 }
 
+# Clone MCP servers and SDKs used as agent infrastructure.
 module5() {
     echo "--- Tools / Infrastructure ---"
     git clone https://github.com/modelcontextprotocol/servers.git "$TARGET_ROOT/mcp-servers"
@@ -83,11 +95,13 @@ module5() {
     git clone https://github.com/modelcontextprotocol/typescript-sdk.git "$TARGET_ROOT/mcp-typescript-sdk"
 }
 
+# Clone inference engines used to serve language models.
 module6() {
     echo "--- Inference Engines ---"
     git clone https://github.com/vllm-project/vllm.git "$TARGET_ROOT/vllm"
 }
 
+# Clone Spring AI Alibaba projects and examples.
 module7() {
     echo "--- Spring Alibaba Ecosystem ---"
     git clone https://github.com/alibaba/spring-ai-alibaba.git "$TARGET_ROOT/spring-ai-alibaba"
@@ -98,6 +112,7 @@ module7() {
     git clone https://github.com/spring-ai-alibaba/dataagent.git "$TARGET_ROOT/dataagent"
 }
 
+# Run every project group sequentially with spacing between their output.
 all_modules() {
     module1
     echo ""
@@ -114,6 +129,7 @@ all_modules() {
     module7
 }
 
+# Dispatch the requested project group and reject unsupported module names.
 case "$choice" in
     1) module1 ;;
     2) module2 ;;

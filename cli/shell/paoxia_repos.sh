@@ -1,7 +1,11 @@
 #!/bin/bash
 
+# List or clone repositories returned by the configured user's GitHub API endpoint.
+# Usage: ./paoxia_repos.sh [target_directory] [option].
+
 set -e
 
+# Change this username to target another GitHub account.
 GITHUB_USER="paoxia"
 GITHUB_API="https://api.github.com/users/${GITHUB_USER}/repos"
 
@@ -10,6 +14,7 @@ echo "  Paoxia GitHub Repositories Clone Tool"
 echo "============================================================"
 echo ""
 
+# Default to the current working directory when no destination is supplied.
 TARGET_DIR="${1:-$(pwd)}"
 mkdir -p "$TARGET_DIR"
 
@@ -17,14 +22,17 @@ echo "Target directory: $TARGET_DIR"
 echo "Fetching repositories for user: ${GITHUB_USER}"
 echo ""
 
+# Fetch repository names across API pages and emit one name per line.
 fetch_repos() {
     local page=1
     local repos=()
 
+    # Request up to 100 repositories per page until a page is empty or incomplete.
     while true; do
         local response
         response=$(curl -s "${GITHUB_API}?page=${page}&per_page=100&type=all")
 
+        # Stop pagination when the unauthenticated API quota is exhausted.
         if echo "$response" | grep -q "API rate limit"; then
             echo "Error: GitHub API rate limit exceeded"
             exit 1
@@ -53,6 +61,7 @@ fetch_repos() {
     printf '%s\n' "${repos[@]}"
 }
 
+# Print command-line options and destination examples.
 show_usage() {
     echo "Usage: $0 [target_directory] [options]"
     echo ""
@@ -69,6 +78,7 @@ show_usage() {
     echo ""
 }
 
+# Display the fetched names with a numbered repository count.
 list_repos() {
     echo "Repositories for ${GITHUB_USER}:"
     echo "----------------------------------------"
@@ -83,7 +93,9 @@ list_repos() {
     echo "Total: $((count-1)) repositories"
 }
 
+# Clone each fetched repository while leaving existing destination directories alone.
 clone_repos() {
+    # This argument is currently unused; both clone modes use the same fetched list.
     local public_only="$1"
     echo "Cloning repositories..."
     echo "----------------------------------------"
@@ -107,6 +119,7 @@ clone_repos() {
     echo "Done!"
 }
 
+# Validate the tools required to request and parse GitHub API responses.
 if ! command -v jq &> /dev/null; then
     echo "Error: jq is required. Install it with: brew install jq"
     exit 1
@@ -117,6 +130,7 @@ if ! command -v curl &> /dev/null; then
     exit 1
 fi
 
+# Dispatch the second argument, or show an interactive action menu.
 case "${2:-}" in
     -l|--list)
         list_repos

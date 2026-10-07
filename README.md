@@ -56,6 +56,10 @@ chmod +x cli/shell/mac_dev_init.sh
 - Python Tools (pyenv, poetry, uv, conda, pipenv)
 - Cloud Tools (AWS CLI, kubectl, helm, terraform)
 - 前端工具 (pnpm, yarn, Vite 等)
+- GitHub CLI (`gh`)
+- 钉钉 DWS CLI (`dws`)
+- 飞书官方 CLI (`lark-cli`)
+- OpenAI Codex CLI (`codex`)
 
 #### Linux
 
@@ -65,6 +69,29 @@ chmod +x cli/shell/linux_dev_init.sh
 ```
 
 支持发行版：Debian/Ubuntu、Fedora/RHEL/CentOS、Arch Linux、openSUSE。
+
+macOS 和 Linux 的初始化菜单均提供以下独立安装选项，选择 `a`（全部安装）也会包含这些工具：
+
+| 菜单选项 | 工具 | 安装方式 |
+|----------|------|----------|
+| 13 | GitHub CLI (`gh`) | macOS 使用 Homebrew；Linux 使用 GitHub 官方软件源（Arch 使用 `github-cli`） |
+| 14 | 钉钉 DWS CLI (`dws`) | `npm install -g dingtalk-workspace-cli` |
+| 15 | 飞书 CLI (`lark-cli`) | `npm install -g @larksuite/cli` |
+| 16 | Codex CLI (`codex`) | `npm install -g @openai/codex` |
+
+已在 PATH 中的工具会跳过安装。npm 安装项会先加载已有 nvm；若缺少 Node.js 16+ 或 npm，会自动调用 Node.js 初始化步骤安装 LTS 版本。全局 npm 安装使用当前用户权限，建议使用脚本提供的 nvm 环境。
+
+安装完成后，按需执行首次登录或配置：
+
+```bash
+gh auth login
+dws auth login
+lark-cli config init
+lark-cli auth login --recommend
+codex
+```
+
+安装参考：[GitHub CLI](https://github.com/cli/cli#installation)、[钉钉 DWS](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli/blob/main/README_zh.md)、[飞书 CLI](https://github.com/larksuite/cli)、[OpenAI Codex CLI](https://developers.openai.com/codex/cli/)。
 
 ### 环境变量管理
 
