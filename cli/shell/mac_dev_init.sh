@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Interactive macOS development environment setup with optional CLI installers.
+# Run this script with Bash; restart the terminal to load persisted shell settings.
+
 set -euo pipefail
 
 RED='\033[0;31m'
@@ -9,6 +12,7 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+# Shared logging helpers use consistent colors; errors are written to stderr.
 log_info() {
     printf "${GREEN}[INFO]${NC} %s\n" "$*"
 }
@@ -25,10 +29,12 @@ log_step() {
     printf "${CYAN}==>${NC} ${BLUE}%s${NC}\n" "$*"
 }
 
+# Check PATH without printing the executable location.
 check_command() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Install Homebrew when absent and load the Apple Silicon or Intel executable path.
 ensure_homebrew() {
     if check_command brew; then
         log_info "Homebrew already installed"
@@ -52,6 +58,7 @@ ensure_homebrew() {
     fi
 }
 
+# Skip installed formulae and forward any extra installation options.
 brew_install() {
     local package="$1"
     shift
@@ -70,6 +77,7 @@ brew_install() {
     fi
 }
 
+# Install desktop applications through Homebrew casks only when absent.
 brew_cask_install() {
     local package="$1"
 
@@ -82,6 +90,7 @@ brew_cask_install() {
     brew install --cask "$package"
 }
 
+# Install Git and initialize user settings and an SSH key only when absent.
 install_git() {
     log_step "Setting up Git..."
 
@@ -118,6 +127,79 @@ install_git() {
     fi
 }
 
+# Install GitHub CLI through Homebrew and display its login command.
+install_github_cli() {
+    if check_command gh; then
+        log_info "GitHub CLI already installed"
+        return
+    fi
+
+    brew_install gh
+    gh --version
+    log_info "GitHub login: gh auth login"
+}
+
+# Reuse an available Node.js environment or install LTS for npm-based CLIs.
+ensure_cli_node() {
+    if ! check_command node || ! check_command npm; then
+        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+        if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+            # Load an existing nvm installation before installing Node.js.
+            . "$NVM_DIR/nvm.sh"
+        elif check_command brew && [[ -s "$(brew --prefix)/opt/nvm/nvm.sh" ]]; then
+            . "$(brew --prefix)/opt/nvm/nvm.sh"
+        fi
+    fi
+
+    if ! check_command node || ! check_command npm || ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 16 ? 0 : 1)'; then
+        log_info "CLI tools require Node.js 16+ and npm; installing Node.js LTS..."
+        install_node
+    fi
+}
+
+# Install a missing CLI globally and verify its executable. Arguments: command, package, version flag.
+install_npm_cli() {
+    local command_name="$1"
+    local package="$2"
+    local version_arg="${3:---version}"
+
+    if check_command "$command_name"; then
+        log_info "$command_name already installed"
+        return
+    fi
+
+    ensure_cli_node
+    # Loading nvm may also make an existing CLI available.
+    if check_command "$command_name"; then
+        log_info "$command_name already installed"
+        return
+    fi
+
+    log_step "Installing $command_name..."
+    npm install -g "$package"
+    "$command_name" "$version_arg"
+}
+
+# Install dws and display the separate login command.
+install_dingtalk_cli() {
+    install_npm_cli dws dingtalk-workspace-cli version
+    log_info "DingTalk login: dws auth login"
+}
+
+# Install lark-cli and display the app configuration and login commands.
+install_feishu_cli() {
+    install_npm_cli lark-cli @larksuite/cli
+    log_info "Feishu setup: lark-cli config init"
+    log_info "Feishu login: lark-cli auth login --recommend"
+}
+
+# Install Codex CLI and display the command used for interactive sign-in.
+install_codex_cli() {
+    install_npm_cli codex @openai/codex
+    log_info "Start Codex and sign in: codex"
+}
+
+# Install JDK 21 and build tools, then register the JDK and persist JAVA_HOME.
 install_java() {
     log_step "Setting up Java..."
 
@@ -142,6 +224,7 @@ install_java() {
     log_info "Java 21, Maven, Gradle installed"
 }
 
+# Install Go and persist a user-owned GOPATH for future shell sessions.
 install_go() {
     log_step "Setting up Go..."
 
@@ -160,23 +243,31 @@ install_go() {
     log_info "Go installed. GOPATH: ${go_path}"
 }
 
+# Install Node.js LTS through nvm and activate it in this script's shell.
 install_node() {
     log_step "Setting up Node.js..."
 
     brew_install nvm
 
     local nvm_dir="${HOME}/.nvm"
+    local nvm_script
+    # Homebrew keeps nvm.sh in its opt directory, separate from NVM_DIR's Node versions.
+    nvm_script="$(brew --prefix)/opt/nvm/nvm.sh"
     mkdir -p "$nvm_dir"
 
     if ! grep -q "NVM_DIR" ~/.zshrc 2>/dev/null; then
         echo "" >> ~/.zshrc
         echo "export NVM_DIR=\"\$HOME/.nvm\"" >> ~/.zshrc
-        echo "[ -s \"\$NVM_DIR/nvm.sh\" ] && \. \"\$NVM_DIR/nvm.sh\"" >> ~/.zshrc
         log_info "Added NVM to ~/.zshrc"
     fi
 
+    # Persist the Homebrew nvm loader without duplicating it on repeated runs.
+    if ! grep -Fq "$nvm_script" ~/.zshrc 2>/dev/null; then
+        echo "[ -s \"$nvm_script\" ] && \. \"$nvm_script\"" >> ~/.zshrc
+    fi
+
     export NVM_DIR="$nvm_dir"
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    . "$nvm_script"
 
     nvm install --lts
     nvm use --lts
@@ -184,6 +275,7 @@ install_node() {
     log_info "Node.js (via nvm) installed"
 }
 
+# Install Docker Desktop; the user starts the application separately.
 install_docker() {
     log_step "Setting up Docker..."
 
@@ -192,6 +284,7 @@ install_docker() {
     log_info "Docker Desktop installed. Please start it from Applications."
 }
 
+# Install database clients and the DBeaver desktop application.
 install_databases() {
     log_step "Setting up database tools..."
 
@@ -204,6 +297,7 @@ install_databases() {
     log_info "MySQL client, PostgreSQL, Redis, DBeaver installed"
 }
 
+# Install development utilities and request fzf key bindings and completion.
 install_dev_tools() {
     log_step "Installing development tools..."
 
@@ -239,6 +333,7 @@ install_dev_tools() {
     log_info "Development tools installed"
 }
 
+# Install IntelliJ IDEA Community Edition as a Homebrew cask.
 install_ide() {
     log_step "Setting up IDE..."
 
@@ -247,6 +342,7 @@ install_ide() {
     log_info "IntelliJ IDEA CE installed"
 }
 
+# Install Zsh helpers and append startup hooks only when not already configured.
 install_terminal_tools() {
     log_step "Setting up terminal tools..."
 
@@ -272,6 +368,7 @@ install_terminal_tools() {
     log_info "Terminal tools installed"
 }
 
+# Install Python, then collect and install optional environment and package managers.
 install_python_tools() {
     log_step "Setting up Python tools..."
 
@@ -288,6 +385,7 @@ install_python_tools() {
     echo "  n) None       - Skip additional tools"
     echo ""
 
+    # Collect choices before running any optional Python tool installers.
     local py_selections=()
     while true; do
         read -rp "Enter your choice (1-5, a, n): " py_choice
@@ -356,6 +454,7 @@ install_python_tools() {
     log_info "Python tools setup complete"
 }
 
+# Install the AWS, Kubernetes, Helm, and Terraform command-line tools.
 install_cloud_tools() {
     log_step "Setting up cloud tools..."
 
@@ -367,6 +466,7 @@ install_cloud_tools() {
     log_info "AWS CLI, kubectl, helm, terraform installed"
 }
 
+# Require Node.js, then collect and install the selected frontend tools.
 install_frontend_tools() {
     log_step "Setting up frontend tools..."
 
@@ -391,6 +491,7 @@ install_frontend_tools() {
     echo "  n) None         - Skip frontend tools"
     echo ""
 
+    # Collect choices before installing global npm packages or the Bun runtime.
     local fe_selections=()
     while true; do
         read -rp "Enter your choice (1-10, a, n): " fe_choice
@@ -483,6 +584,7 @@ install_frontend_tools() {
     log_info "Frontend tools setup complete"
 }
 
+# Display component numbers used by the selection dispatcher in main.
 show_menu() {
     echo ""
     printf "${CYAN}========================================${NC}\n"
@@ -503,12 +605,17 @@ show_menu() {
     echo " 10) Python Tools           - Python 3.12 + optional: pyenv, poetry, uv, conda, pipenv"
     echo " 11) Cloud Tools            - AWS CLI, kubectl, helm, terraform"
     echo " 12) Frontend Tools         - pnpm, yarn, bun, typescript, vite, prettier, eslint, etc."
+    echo " 13) GitHub CLI             - GitHub from the terminal (gh)"
+    echo " 14) DingTalk CLI           - DingTalk Workspace CLI (dws)"
+    echo " 15) Feishu CLI             - Official Lark/Feishu CLI (lark-cli)"
+    echo " 16) Codex CLI              - OpenAI coding agent (codex)"
     echo ""
     echo "  a) All                    - Install all components"
     echo "  q) Quit                   - Exit without installation"
     echo ""
 }
 
+# Read a value and return the supplied default when the input is empty.
 read_selection() {
     local prompt="$1"
     local default="$2"
@@ -518,6 +625,7 @@ read_selection() {
     echo "${result:-$default}"
 }
 
+# Validate the platform, collect choices, and install components after confirmation.
 main() {
     if [[ "$(uname)" != "Darwin" ]]; then
         log_error "This script is designed for macOS only."
@@ -529,12 +637,13 @@ main() {
     ensure_homebrew
     brew update
 
+    # Preserve selection order; the All preset installs Node.js before npm-based tools.
     local selections=()
 
     while true; do
         show_menu
         local choice
-        read -rp "Enter your choice (1-12, a, q): " choice
+        read -rp "Enter your choice (1-16, a, q): " choice
 
         case "$choice" in
             1) selections+=("git") ;;
@@ -549,8 +658,12 @@ main() {
             10) selections+=("python") ;;
             11) selections+=("cloud") ;;
             12) selections+=("frontend") ;;
+            13) selections+=("github_cli") ;;
+            14) selections+=("dingtalk_cli") ;;
+            15) selections+=("feishu_cli") ;;
+            16) selections+=("codex_cli") ;;
             a|A)
-                selections=(git java go node docker databases dev_tools ide terminal python cloud frontend)
+                selections=(git java go node docker databases dev_tools ide terminal python cloud frontend github_cli dingtalk_cli feishu_cli codex_cli)
                 break
                 ;;
             q|Q)
@@ -580,6 +693,7 @@ main() {
     printf "  - %s\n" "${selections[@]}"
     echo ""
 
+    # Confirm the complete component list before applying installation changes.
     local confirm
     read -rp "Proceed? (y/n): " confirm
     if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
@@ -587,6 +701,7 @@ main() {
         exit 0
     fi
 
+    # Dispatch each selected component to its installer in the collected order.
     for selection in "${selections[@]}"; do
         case "$selection" in
             git) install_git ;;
@@ -601,6 +716,10 @@ main() {
             python) install_python_tools ;;
             cloud) install_cloud_tools ;;
             frontend) install_frontend_tools ;;
+            github_cli) install_github_cli ;;
+            dingtalk_cli) install_dingtalk_cli ;;
+            feishu_cli) install_feishu_cli ;;
+            codex_cli) install_codex_cli ;;
         esac
     done
 
@@ -613,4 +732,5 @@ main() {
     echo ""
 }
 
+# Execute the interactive setup when this script is invoked.
 main "$@"

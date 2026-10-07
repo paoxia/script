@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Interactive Linux development environment setup with optional CLI installers.
+# Run this script with Bash; restart the terminal to load persisted shell settings.
+
 set -euo pipefail
 
 RED='\033[0;31m'
@@ -9,6 +12,7 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+# Shared logging helpers use consistent colors; errors are written to stderr.
 log_info() {
     printf "${GREEN}[INFO]${NC} %s\n" "$*"
 }
@@ -25,10 +29,12 @@ log_step() {
     printf "${CYAN}==>${NC} ${BLUE}%s${NC}\n" "$*"
 }
 
+# Check PATH without printing the executable location.
 check_command() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Select the first supported package manager available on PATH.
 detect_package_manager() {
     if check_command apt-get; then
         echo "apt"
@@ -48,6 +54,7 @@ detect_package_manager() {
 PKG_MANAGER=""
 SUDO_CMD=""
 
+# Run package operations directly as root, otherwise require sudo.
 setup_sudo() {
     if [[ "${EUID}" -eq 0 ]]; then
         SUDO_CMD=""
@@ -62,6 +69,7 @@ setup_sudo() {
     fi
 }
 
+# Install package names supplied by the caller using the detected package manager.
 pkg_install() {
     local packages=("$@")
     local pkg
@@ -90,6 +98,7 @@ pkg_install() {
     esac
 }
 
+# Install Git and initialize user settings and an SSH key only when absent.
 install_git() {
     log_step "Setting up Git..."
 
@@ -126,6 +135,110 @@ install_git() {
     fi
 }
 
+# Use GitHub's signed package repositories, or the Arch community package.
+install_github_cli() {
+    if check_command gh; then
+        log_info "GitHub CLI already installed"
+        return
+    fi
+
+    log_step "Installing GitHub CLI..."
+    pkg_install ca-certificates curl
+
+    case "$PKG_MANAGER" in
+        apt)
+            # Bind the GitHub package source to its dedicated signing keyring.
+            $SUDO_CMD install -m 0755 -d /etc/apt/keyrings /etc/apt/sources.list.d
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg |
+                $SUDO_CMD tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+            $SUDO_CMD chmod a+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" |
+                $SUDO_CMD tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            pkg_install gh
+            ;;
+        dnf|yum)
+            # Write a stable repository file so retries do not add duplicate entries.
+            $SUDO_CMD install -m 0755 -d /etc/yum.repos.d
+            curl -fsSL https://cli.github.com/packages/rpm/gh-cli.repo |
+                $SUDO_CMD tee /etc/yum.repos.d/gh-cli.repo > /dev/null
+            pkg_install gh
+            ;;
+        pacman)
+            pkg_install github-cli
+            ;;
+        zypper)
+            # Refresh the added repository and import its signing keys before installation.
+            $SUDO_CMD install -m 0755 -d /etc/zypp/repos.d
+            curl -fsSL https://cli.github.com/packages/rpm/gh-cli.repo |
+                $SUDO_CMD tee /etc/zypp/repos.d/gh-cli.repo > /dev/null
+            $SUDO_CMD zypper --non-interactive --gpg-auto-import-keys refresh
+            pkg_install gh
+            ;;
+    esac
+
+    gh --version
+    log_info "GitHub login: gh auth login"
+}
+
+# Reuse an available Node.js environment or install LTS for npm-based CLIs.
+ensure_cli_node() {
+    if ! check_command node || ! check_command npm; then
+        export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+        if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+            # Load an existing nvm installation before installing Node.js.
+            . "$NVM_DIR/nvm.sh"
+        fi
+    fi
+
+    if ! check_command node || ! check_command npm || ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 16 ? 0 : 1)'; then
+        log_info "CLI tools require Node.js 16+ and npm; installing Node.js LTS..."
+        install_node
+    fi
+}
+
+# Install a missing CLI globally and verify its executable. Arguments: command, package, version flag.
+install_npm_cli() {
+    local command_name="$1"
+    local package="$2"
+    local version_arg="${3:---version}"
+
+    if check_command "$command_name"; then
+        log_info "$command_name already installed"
+        return
+    fi
+
+    ensure_cli_node
+    # Loading nvm may also make an existing CLI available.
+    if check_command "$command_name"; then
+        log_info "$command_name already installed"
+        return
+    fi
+
+    log_step "Installing $command_name..."
+    npm install -g "$package"
+    "$command_name" "$version_arg"
+}
+
+# Install dws and display the separate login command.
+install_dingtalk_cli() {
+    install_npm_cli dws dingtalk-workspace-cli version
+    log_info "DingTalk login: dws auth login"
+}
+
+# Install lark-cli and display the app configuration and login commands.
+install_feishu_cli() {
+    install_npm_cli lark-cli @larksuite/cli
+    log_info "Feishu setup: lark-cli config init"
+    log_info "Feishu login: lark-cli auth login --recommend"
+}
+
+# Install Codex CLI and display the command used for interactive sign-in.
+install_codex_cli() {
+    install_npm_cli codex @openai/codex
+    log_info "Start Codex and sign in: codex"
+}
+
+# Install JDK 21 and build tools, then configure JAVA_HOME when its location is known.
 install_java() {
     log_step "Setting up Java..."
 
@@ -166,6 +279,7 @@ install_java() {
     log_info "Java 21, Maven, Gradle installed"
 }
 
+# Install Go and persist a user-owned GOPATH for future shell sessions.
 install_go() {
     log_step "Setting up Go..."
 
@@ -184,6 +298,7 @@ install_go() {
     log_info "Go installed. GOPATH: ${go_path}"
 }
 
+# Install Node.js LTS through nvm and activate it in this script's shell.
 install_node() {
     log_step "Setting up Node.js..."
 
@@ -203,6 +318,7 @@ install_node() {
     log_info "Node.js (via nvm) installed"
 }
 
+# Install Docker packages and grant the current user access through the docker group.
 install_docker() {
     log_step "Setting up Docker..."
 
@@ -242,6 +358,7 @@ install_docker() {
     log_info "Docker installed. You may need to logout and login again for group changes."
 }
 
+# Map database client package names to the current distribution.
 install_databases() {
     log_step "Setting up database tools..."
 
@@ -267,6 +384,7 @@ install_databases() {
     log_info "Database clients installed"
 }
 
+# Install common utilities and distribution-specific development packages.
 install_dev_tools() {
     log_step "Installing development tools..."
 
@@ -306,6 +424,7 @@ install_dev_tools() {
     log_info "Development tools installed"
 }
 
+# Use Snap for IntelliJ IDEA when available; otherwise show manual installation guidance.
 install_ide() {
     log_step "Setting up IDE..."
 
@@ -322,6 +441,7 @@ install_ide() {
     fi
 }
 
+# Install Zsh helpers and append startup hooks only when not already configured.
 install_terminal_tools() {
     log_step "Setting up terminal tools..."
 
@@ -357,6 +477,7 @@ install_terminal_tools() {
     log_info "Terminal tools installed"
 }
 
+# Install Python, then collect and install optional environment and package managers.
 install_python_tools() {
     log_step "Setting up Python tools..."
 
@@ -386,6 +507,7 @@ install_python_tools() {
     echo "  n) None       - Skip additional tools"
     echo ""
 
+    # Collect choices before running any optional Python tool installers.
     local py_selections=()
     while true; do
         read -rp "Enter your choice (1-5, a, n): " py_choice
@@ -487,6 +609,7 @@ install_python_tools() {
     log_info "Python tools setup complete"
 }
 
+# Install missing cloud CLIs from downloaded archives and installer scripts.
 install_cloud_tools() {
     log_step "Setting up cloud tools..."
 
@@ -521,6 +644,7 @@ install_cloud_tools() {
     log_info "Cloud tools installed"
 }
 
+# Require Node.js, then collect and install the selected frontend tools.
 install_frontend_tools() {
     log_step "Setting up frontend tools..."
 
@@ -545,6 +669,7 @@ install_frontend_tools() {
     echo "  n) None         - Skip frontend tools"
     echo ""
 
+    # Collect choices before installing global npm packages or the Bun runtime.
     local fe_selections=()
     while true; do
         read -rp "Enter your choice (1-10, a, n): " fe_choice
@@ -642,6 +767,7 @@ install_frontend_tools() {
     log_info "Frontend tools setup complete"
 }
 
+# Display component numbers used by the selection dispatcher in main.
 show_menu() {
     echo ""
     printf "${CYAN}========================================${NC}\n"
@@ -664,12 +790,17 @@ show_menu() {
     echo " 10) Python Tools           - Python 3 + optional: pyenv, poetry, uv, conda, pipenv"
     echo " 11) Cloud Tools            - AWS CLI, kubectl, helm, terraform"
     echo " 12) Frontend Tools         - pnpm, yarn, bun, typescript, vite, prettier, eslint, etc."
+    echo " 13) GitHub CLI             - GitHub from the terminal (gh)"
+    echo " 14) DingTalk CLI           - DingTalk Workspace CLI (dws)"
+    echo " 15) Feishu CLI             - Official Lark/Feishu CLI (lark-cli)"
+    echo " 16) Codex CLI              - OpenAI coding agent (codex)"
     echo ""
     echo "  a) All                    - Install all components"
     echo "  q) Quit                   - Exit without installation"
     echo ""
 }
 
+# Validate the platform, collect choices, and install components after confirmation.
 main() {
     if [[ "$(uname)" == "Darwin" ]]; then
         log_error "This script is for Linux only. Use mac_dev_init.sh for macOS."
@@ -687,12 +818,13 @@ main() {
     log_info "Starting Linux development environment setup..."
     log_info "Package manager: $PKG_MANAGER"
 
+    # Preserve selection order; the All preset installs Node.js before npm-based tools.
     local selections=()
 
     while true; do
         show_menu
         local choice
-        read -rp "Enter your choice (1-12, a, q): " choice
+        read -rp "Enter your choice (1-16, a, q): " choice
 
         case "$choice" in
             1) selections+=("git") ;;
@@ -707,8 +839,12 @@ main() {
             10) selections+=("python") ;;
             11) selections+=("cloud") ;;
             12) selections+=("frontend") ;;
+            13) selections+=("github_cli") ;;
+            14) selections+=("dingtalk_cli") ;;
+            15) selections+=("feishu_cli") ;;
+            16) selections+=("codex_cli") ;;
             a|A)
-                selections=(git java go node docker databases dev_tools ide terminal python cloud frontend)
+                selections=(git java go node docker databases dev_tools ide terminal python cloud frontend github_cli dingtalk_cli feishu_cli codex_cli)
                 break
                 ;;
             q|Q)
@@ -738,6 +874,7 @@ main() {
     printf "  - %s\n" "${selections[@]}"
     echo ""
 
+    # Confirm the complete component list before applying installation changes.
     local confirm
     read -rp "Proceed? (y/n): " confirm
     if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
@@ -745,6 +882,7 @@ main() {
         exit 0
     fi
 
+    # Dispatch each selected component to its installer in the collected order.
     for selection in "${selections[@]}"; do
         case "$selection" in
             git) install_git ;;
@@ -759,6 +897,10 @@ main() {
             python) install_python_tools ;;
             cloud) install_cloud_tools ;;
             frontend) install_frontend_tools ;;
+            github_cli) install_github_cli ;;
+            dingtalk_cli) install_dingtalk_cli ;;
+            feishu_cli) install_feishu_cli ;;
+            codex_cli) install_codex_cli ;;
         esac
     done
 
@@ -771,4 +913,5 @@ main() {
     echo ""
 }
 
+# Execute the interactive setup when this script is invoked.
 main "$@"
